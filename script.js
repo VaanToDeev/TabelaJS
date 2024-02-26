@@ -1,17 +1,59 @@
-const xlsx = require('xlsx'); // Assumindo que você instalou a biblioteca xlsx
-
-const colorOptions = ['#FF5733', '#3498DB', '#27AE60', '#F1C40F', '#9B59B6'];
+const colorOptions = ['#FF5733', '#3498DB', '#27AE60', '#F1C40F', '#9B59B6', '#ffff'];
 
 let showColorOptions = true;
 let selectedColor = null;
 let originalColor = [];
+let isEditing = false;
 
 function handleCellClick(event) {
-  if (event.target.classList.contains('color-button')) {
+  if (event.detail === 2 && !isEditing) { // Check for double click
+    isEditing = true;
+    const cell = event.target.closest('td');
+
+    // Remove any existing color options from the cell
+    cell.querySelectorAll('.color-options').forEach((div) => div.remove());
+
+    cell.contentEditable = true;
+    cell.focus(); // Set focus to the cell
+    cell.addEventListener('blur', handleCellBlur); // Add event listener for losing focus
+  } else if (event.target.classList.contains('color-button')) {
     showColorOptions = true;
     const cell = event.target.closest('td');
     originalColor = cell.style.backgroundColor;
     cell.style.backgroundColor = selectedColor;
+  }
+}
+
+function handleCellBlur(event) {
+  const cell = event.target;
+  cell.contentEditable = false;
+  isEditing = false;
+}
+
+function createColorOptionsDiv(rowIndex, colIndex) {
+  const colorOptionsDiv = document.createElement('div');
+  colorOptionsDiv.classList.add('color-options', 'active');
+
+  colorOptions.forEach((color) => {
+    const colorButton = document.createElement('button');
+    colorButton.classList.add('color-button');
+    colorButton.style.backgroundColor = color;
+    colorButton.addEventListener('click', () => handleColorChange(color, rowIndex, colIndex));
+    colorOptionsDiv.appendChild(colorButton);
+  });
+
+  return colorOptionsDiv;
+}
+
+// **Modified handleTextInput function:**
+function handleTextInput(event) {
+  const cell = event.target;
+
+  // **Only show color options once when the cell becomes empty:**
+  if (cell.textContent.trim() === '' && showColorOptions) {
+    const colorOptionsDiv = createColorOptionsDiv(cell.dataset.row, cell.dataset.col);
+    cell.appendChild(colorOptionsDiv);
+    showColorOptions = false; // Hide color options for subsequent keystrokes
   }
 }
 
@@ -29,50 +71,42 @@ function handleMouseLeave() {
 
 function handleColorChange(color, rowIndex, colIndex) {
   selectedColor = color;
-  const cell = document.querySelector(`td[data-row="${rowIndex}"][data-col="${colIndex}"]`);
+  const cell = document.querySelector(`td[data-row="<span class="math-inline">\{rowIndex\}"\]\[data\-col\="</span>{colIndex}"]`);
   cell.style.backgroundColor = color;
-  localStorage.setItem(`cell-${rowIndex}-${colIndex}`, color);
+  localStorage.setItem(`cell-<span class="math-inline">\{rowIndex\}\-</span>{colIndex}`, color);
 }
 
-async function createTable() {
+function createTable() {
   const table = document.createElement('table');
   table.classList.add('table');
 
   const tbody = document.createElement('tbody');
 
-  try {
-    const workbook = await xlsx.readFile('Cronograma.xlsx');
-    const sheetName = 'Planilha1'; // Substitua pelo nome real da planilha
-    const sheet = workbook.Sheets[sheetName];
+  for (let rowIndex = 0; rowIndex < 5; rowIndex++) {
+    const tr = document.createElement('tr');
 
-    const data = [];
+    for (let colIndex = 0; colIndex < 5; colIndex++) {
+      const td = document.createElement('td');
+      td.dataset.row = rowIndex;
+      td.dataset.col = colIndex;
+      td.addEventListener('click', handleCellClick);
+      td.addEventListener('mouseenter', handleMouseEnter);
+      td.addEventListener('mouseleave', handleMouseLeave);
 
-    for (let row = 1; row <= sheet['!ref'].split(':')[1].row; row++) {
-      const rowData = [];
-      for (let col = 1; col <= sheet['!ref'].split(':')[1].col; col++) {
-        const cell = sheet[`${col}${row}`];
-        rowData.push(cell ? cell.v : '');
-      }
-      data.push(rowData);
-    }
-
-    // Popular a tabela com os dados do Excel
-    for (let rowIndex = 0; rowIndex < data.length; rowIndex++) {
-      const tr = document.createElement('tr');
-
-      for (let colIndex = 0; colIndex < data[rowIndex].length; colIndex++) {
-        const td = document.createElement('td');
-        td.textContent = data[rowIndex][colIndex];
-        // Adicione os event listeners existentes e a lógica relacionada à cor
-        // ...
-        tr.appendChild(td);
+      const originalColor = localStorage.getItem(`cell-${rowIndex}-${colIndex}`);
+      if (originalColor) {
+        td.style.backgroundColor = originalColor;
       }
 
-      tbody.appendChild(tr);
+      if (showColorOptions) {
+        const colorOptionsDiv = createColorOptionsDiv(rowIndex, colIndex);
+        td.appendChild(colorOptionsDiv);
+      }
+
+      tr.appendChild(td);
     }
-  } catch (error) {
-    console.error('Erro ao ler o arquivo Excel:', error);
-    // Manipule o erro de forma adequada, por exemplo, exiba uma mensagem de erro para o usuário
+
+    tbody.appendChild(tr);
   }
 
   table.appendChild(tbody);
